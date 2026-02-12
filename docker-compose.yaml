@@ -5,12 +5,12 @@ services:
     restart: always
     environment:
       # === Required Settings
-      MAIN_URL: 'http://localhost:4007'
-      FRONTEND_URL: 'http://localhost:4007'
-      NEXT_PUBLIC_BACKEND_URL: 'http://localhost:4007/api'
-      JWT_SECRET: 'random string that is unique to every install - just type random characters here!'
-      DATABASE_URL: 'postgresql://postiz-user:postiz-password@postiz-postgres:5432/postiz-db-local'
-      REDIS_URL: 'redis://postiz-redis:6379'
+      MAIN_URL: ${MAIN_URL:-http://localhost}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost/api}
+      JWT_SECRET: ${JWT_SECRET:-random string for your JWT secret, make it long}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postiz-user:postiz-password@postiz-postgres:5432/postiz-db-local}
+      REDIS_URL: ${REDIS_URL:-redis://postiz-redis:6379}
       BACKEND_INTERNAL_URL: 'http://localhost:3000'
       TEMPORAL_ADDRESS: "temporal:7233"
       IS_GENERAL: 'true'
@@ -95,7 +95,6 @@ services:
 
       # === Developer Settings
       NX_ADD_PLUGINS: false
-
       # === Short Link Service Settings (Optional - leave blank if unused)
       # DUB_TOKEN: ""
       # DUB_API_ENDPOINT: "https://api.dub.co"
@@ -111,8 +110,8 @@ services:
     volumes:
       - postiz-config:/config/
       - postiz-uploads:/uploads/
-    ports:
-      - "4007:5000"
+    expose:
+      - "5000"
     networks:
       - postiz-network
       - temporal-network
@@ -121,6 +120,25 @@ services:
         condition: service_healthy
       postiz-redis:
         condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: postiz-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - postiz-network
+    depends_on:
+      - postiz
 
   postiz-postgres:
     image: postgres:17-alpine
@@ -153,16 +171,6 @@ services:
     networks:
       - postiz-network
 
-  # For Application Monitoring / Debugging
-  spotlight:
-    pull_policy: always
-    container_name: spotlight
-    ports:
-      - 8969:8969/tcp
-    image: ghcr.io/getsentry/spotlight:latest
-    networks:
-      - postiz-network
-
   # -----------------------
   # Temporal Stack
   # -----------------------
@@ -182,20 +190,22 @@ services:
     expose:
       - 9200
     volumes:
-      - /var/lib/elasticsearch/data
+      - temporal-es-data:/var/lib/elasticsearch/data
 
   temporal-postgresql:
     container_name: temporal-postgresql
     image: postgres:16
+    restart: always
     environment:
       POSTGRES_PASSWORD: temporal
       POSTGRES_USER: temporal
+      POSTGRES_DB: temporal
     networks:
       - temporal-network
     expose:
       - 5432
     volumes:
-      - /var/lib/postgresql/data
+      - temporal-postgres-data:/var/lib/postgresql/data
 
   temporal:
     container_name: temporal
@@ -207,10 +217,11 @@ services:
       - temporal-elasticsearch
     environment:
       - DB=postgres12
-      - DB_PORT=5432
-      - POSTGRES_USER=temporal
-      - POSTGRES_PWD=temporal
-      - POSTGRES_SEEDS=temporal-postgresql
+      - DB_PORT=${TEMPORAL_DB_PORT:-5432}
+      - POSTGRES_USER=${TEMPORAL_POSTGRES_USER:-temporal}
+      - POSTGRES_PWD=${TEMPORAL_POSTGRES_PASSWORD:-temporal}
+      - POSTGRES_SEEDS=${TEMPORAL_POSTGRES_HOST:-temporal-postgresql}
+      - POSTGRES_DB=${TEMPORAL_POSTGRES_DB:-temporal}
       - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
       - ENABLE_ES=true
       - ES_SEEDS=temporal-elasticsearch
@@ -258,6 +269,18 @@ volumes:
     external: false
 
   postiz-uploads:
+    external: false
+
+  temporal-es-data:
+    external: false
+
+  temporal-postgres-data:
+    external: false
+
+  caddy-data:
+    external: false
+
+  caddy-config:
     external: false
 
 networks:
