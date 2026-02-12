@@ -44,6 +44,8 @@ set_env_var() {
 
     # Remove existing line(s) for this key
     sedi "/^${key}=/d" "$file"
+    # Ensure file ends with a newline before appending
+    [ -s "$file" ] && [ "$(tail -c1 "$file")" != "" ] && echo "" >> "$file"
     # Append new value
     echo "${key}=\"${value}\"" >> "$file"
 }
