@@ -110,7 +110,7 @@ cmd_install() {
     if docker compose ps -q 2>/dev/null | grep -q .; then
         log_warn "Existing Docker containers detected for this project."
         echo -n "  Do you want to perform a FRESH install (deletes ALL data)? [y/N]: "
-        read -r confirm_wipe
+        read -r confirm_wipe < /dev/tty
         if [[ "$confirm_wipe" =~ ^[Yy]$ ]]; then
             log_warn "Stopping containers and wiping all volumes..."
             docker compose down -v --remove-orphans 2>/dev/null || true
@@ -162,7 +162,7 @@ cmd_install() {
         echo "  Current domain: ${CURRENT_DOMAIN}"
     fi
     echo -n "  Enter your domain (e.g. postiz.example.com) or press Enter for localhost: "
-    read -r input_domain
+    read -r input_domain < /dev/tty
     input_domain=${input_domain:-${CURRENT_DOMAIN:-localhost}}
 
     # Determine protocol and build URLs
@@ -206,7 +206,7 @@ cmd_install() {
     echo "        → Use your own Redis & Postgres servers (e.g., AWS RDS, Railway)"
     echo ""
     echo -n "  Select [1/2] (default: 1): "
-    read -r db_choice
+    read -r db_choice < /dev/tty
     db_choice=${db_choice:-1}
 
     if [ "$db_choice" = "2" ]; then
@@ -216,14 +216,14 @@ cmd_install() {
         echo ""
         echo -e "  ${BOLD}--- Postiz Database ---${NC}"
         echo -n "  PostgreSQL URL (e.g. postgresql://user:pass@host:5432/postiz): "
-        read -r pg_url
+        read -r pg_url < /dev/tty
         if [ -z "$pg_url" ]; then
             log_error "PostgreSQL URL cannot be empty."
             exit 1
         fi
 
         echo -n "  Redis URL (e.g. redis://host:6379): "
-        read -r redis_url
+        read -r redis_url < /dev/tty
         if [ -z "$redis_url" ]; then
             log_error "Redis URL cannot be empty."
             exit 1
@@ -233,22 +233,22 @@ cmd_install() {
         echo -e "  ${BOLD}--- Temporal Database (Separate) ---${NC}"
         echo "  Temporal needs its own PostgreSQL database."
         echo -n "  Temporal DB Host (e.g. db.example.com): "
-        read -r temp_host
+        read -r temp_host < /dev/tty
         if [ -z "$temp_host" ]; then
             log_error "Temporal DB Host cannot be empty."
             exit 1
         fi
 
         echo -n "  Temporal DB Port (default: 5432): "
-        read -r temp_port
+        read -r temp_port < /dev/tty
         temp_port=${temp_port:-5432}
 
         echo -n "  Temporal DB User (default: temporal): "
-        read -r temp_user
+        read -r temp_user < /dev/tty
         temp_user=${temp_user:-temporal}
 
         echo -n "  Temporal DB Password (default: temporal): "
-        read -r temp_pass
+        read -r temp_pass < /dev/tty
         temp_pass=${temp_pass:-temporal}
 
         # Write to .env
@@ -390,7 +390,7 @@ cmd_reset_jwt() {
     echo ""
     log_warn "Resetting JWT Secret will invalidate ALL existing user sessions."
     echo -n "  Are you sure you want to continue? [y/N]: "
-    read -r confirm
+    read -r confirm < /dev/tty
 
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
         local new_secret
