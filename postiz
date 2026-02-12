@@ -267,7 +267,9 @@ cmd_install() {
 
 services:
   postiz:
-    depends_on: {}
+    depends_on: !override
+      temporal:
+        condition: service_started
 
   postiz-postgres:
     profiles: ["donotstart"]
@@ -279,7 +281,7 @@ services:
     profiles: ["donotstart"]
 
   temporal:
-    depends_on:
+    depends_on: !override
       temporal-elasticsearch:
         condition: service_started
 OVERRIDE_EOF
