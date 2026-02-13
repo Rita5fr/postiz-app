@@ -1,0 +1,131 @@
+name: Railway Sleep/Wake Schedule
+
+# Runs at 10 PM IST (4:30 PM UTC) to sleep, and 8 AM IST (2:30 AM UTC) to wake
+on:
+  schedule:
+    - cron: '30 16 * * *'  # 10:00 PM IST → Sleep
+    - cron: '30 2 * * *'   # 8:00 AM IST → Wake
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - sleep
+          - wake
+
+env:
+  RAILWAY_API_URL: https://backboard.railway.com/graphql/v2
+  PROJECT_ID: a82ea0fc-c9bc-4f9b-8f86-176da9b0d66d
+  ENVIRONMENT_ID: 8b4a381d-ba3b-4e9f-8cb6-1d0277e9a867
+
+jobs:
+  manage-railway:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine action
+        id: action
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "action=${{ github.event.inputs.action }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "30 16 * * *" ]; then
+            echo "action=sleep" >> $GITHUB_OUTPUT
+          else
+            echo "action=wake" >> $GITHUB_OUTPUT
+          fi
+
+      # ============ SLEEP: Stop all services ============
+      # Order: postiz-app → temporal-admin-tools → temporal → temporal-elasticsearch
+      - name: "😴 Stop all services"
+        if: steps.action.outputs.action == 'sleep'
+        run: |
+          echo "🌙 Putting Railway services to sleep..."
+
+          # Service IDs (stop order: app first, infra last)
+          SERVICES=(
+            "08568cd3-f76f-4613-8cdb-5f5478d835fa"  # postiz-app
+            "68076e61-cdb6-4f3e-a641-efa6102784e5"  # temporal-admin-tools
+            "15b17a3d-3cbb-46db-b6f2-3ddd23a81b85"  # temporal
+            "ea493b72-0024-47a1-9c50-1ce2447ff467"  # temporal-elasticsearch
+          )
+          SERVICE_NAMES=("postiz-app" "temporal-admin-tools" "temporal" "temporal-elasticsearch")
+
+          for i in "${!SERVICES[@]}"; do
+            SERVICE_ID="${SERVICES[$i]}"
+            SERVICE_NAME="${SERVICE_NAMES[$i]}"
+            echo ""
+            echo "Stopping $SERVICE_NAME ($SERVICE_ID)..."
+
+            # Get latest active deployment
+            RESPONSE=$(curl -s -X POST "$RAILWAY_API_URL" \
+              -H "Authorization: Bearer ${{ secrets.RAILWAY_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "query": "query { deployments(input: { projectId: \"'"$PROJECT_ID"'\", serviceId: \"'"$SERVICE_ID"'\", environmentId: \"'"$ENVIRONMENT_ID"'\", status: { in: [SUCCESS] } }, first: 1) { edges { node { id } } } }"
+              }')
+
+            DEPLOYMENT_ID=$(echo "$RESPONSE" | jq -r '.data.deployments.edges[0].node.id // empty')
+
+            if [ -n "$DEPLOYMENT_ID" ]; then
+              STOP_RESPONSE=$(curl -s -X POST "$RAILWAY_API_URL" \
+                -H "Authorization: Bearer ${{ secrets.RAILWAY_API_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                -d '{
+                  "query": "mutation { deploymentStop(id: \"'"$DEPLOYMENT_ID"'\") }"
+                }')
+              echo "  ✅ Stopped $SERVICE_NAME (deployment: $DEPLOYMENT_ID)"
+            else
+              echo "  ⚠️ No active deployment found for $SERVICE_NAME"
+            fi
+
+            sleep 2
+          done
+
+          echo ""
+          echo "🌙 All services stopped at $(date -u '+%Y-%m-%d %H:%M UTC')"
+
+      # ============ WAKE: Redeploy all services ============
+      # Order: temporal-elasticsearch → temporal → temporal-admin-tools → postiz-app
+      - name: "☀️ Wake up services"
+        if: steps.action.outputs.action == 'wake'
+        run: |
+          echo "☀️ Waking up Railway services..."
+
+          # Service IDs (wake order: infra first, app last)
+          SERVICES=(
+            "ea493b72-0024-47a1-9c50-1ce2447ff467"  # temporal-elasticsearch
+            "15b17a3d-3cbb-46db-b6f2-3ddd23a81b85"  # temporal
+            "68076e61-cdb6-4f3e-a641-efa6102784e5"  # temporal-admin-tools
+            "08568cd3-f76f-4613-8cdb-5f5478d835fa"  # postiz-app
+          )
+          SERVICE_NAMES=("temporal-elasticsearch" "temporal" "temporal-admin-tools" "postiz-app")
+
+          # Wait times between services (seconds) to let dependencies start
+          WAIT_TIMES=(30 20 10 0)
+
+          for i in "${!SERVICES[@]}"; do
+            SERVICE_ID="${SERVICES[$i]}"
+            SERVICE_NAME="${SERVICE_NAMES[$i]}"
+            echo ""
+            echo "Starting $SERVICE_NAME ($SERVICE_ID)..."
+
+            RESPONSE=$(curl -s -X POST "$RAILWAY_API_URL" \
+              -H "Authorization: Bearer ${{ secrets.RAILWAY_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "query": "mutation { environmentTriggersDeploy(input: { projectId: \"'"$PROJECT_ID"'\", environmentId: \"'"$ENVIRONMENT_ID"'\", serviceId: \"'"$SERVICE_ID"'\" }) }"
+              }')
+
+            echo "  ✅ Deploy triggered for $SERVICE_NAME"
+            echo "  Response: $RESPONSE"
+
+            WAIT="${WAIT_TIMES[$i]}"
+            if [ "$WAIT" -gt 0 ]; then
+              echo "  ⏳ Waiting ${WAIT}s for $SERVICE_NAME to initialize..."
+              sleep "$WAIT"
+            fi
+          done
+
+          echo ""
+          echo "☀️ All services are waking up at $(date -u '+%Y-%m-%d %H:%M UTC')"
