@@ -13,24 +13,24 @@ const nextConfig = {
       headers: [{
         key: "Document-Policy",
         value: "js-profiling",
-      }, ],
-    }, ];
+      },],
+    },];
   },
   reactStrictMode: false,
   transpilePackages: ['crypto-hash'],
   // Enable production sourcemaps for Sentry
-  productionBrowserSourceMaps: true,
-  
+  productionBrowserSourceMaps: false,
+
   // Custom webpack config to ensure sourcemaps are generated properly
   webpack: (config, { buildId, dev, isServer, defaultLoaders }) => {
     // Enable sourcemaps for both client and server in production
     if (!dev) {
       config.devtool = isServer ? 'source-map' : 'hidden-source-map';
     }
-    
+
     return config;
   },
-  
+
   images: {
     remotePatterns: [
       {

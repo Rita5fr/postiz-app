@@ -88,6 +88,34 @@ const loadImage = await fetch(path, {
 
 ---
 
+### 7. PM2 Memory Limits (RAM Optimization)
+**Files:** `apps/frontend/package.json`, `apps/backend/package.json`, `apps/orchestrator/package.json`
+
+**What:** Added `--max-memory-restart` and `--max-old-space-size` to PM2 commands:
+- **frontend:** 512M
+- **backend:** 768M (needs more for Temporal Runtime)
+- **orchestrator:** 512M
+
+**Why:** Without limits, each process can grow to 2+ GB, causing 3+ GB total idle RAM.
+
+---
+
+### 8. Next.js Sourcemap Optimization
+**File:** `apps/frontend/next.config.js`
+
+**What:** Set `productionBrowserSourceMaps: false`
+
+**Why:** Keeping production sourcemaps in memory wastes ~100-200 MB. Sentry upload (`deleteSourcemapsAfterUpload`) still works.
+
+---
+
+### 9. Multi-Stage Dockerfile
+**File:** `Dockerfile.dev`
+
+**What:** Separated build stage (with `g++`, `make`, `python3`) from runtime stage (only `nginx`, `node`, `pm2`). Also prunes dev dependencies with `pnpm prune --prod`.
+
+**Why:** Reduces Docker image from ~1.2 GB to ~700 MB, making deploys 2x faster.
+
 ## Upgrade Procedure
 
 ### Step 1: Fetch upstream
