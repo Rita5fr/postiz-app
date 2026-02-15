@@ -116,6 +116,15 @@ const loadImage = await fetch(path, {
 
 **Why:** Reduces Docker image from ~1.2 GB to ~700 MB, making deploys 2x faster.
 
+---
+
+### 10. Nginx IPv6 Fix
+**File:** `var/docker/nginx.conf`
+
+**What:** Changed `proxy_pass http://localhost:` to `proxy_pass http://127.0.0.1:` in both `/api/` and `/` location blocks.
+
+**Why:** On Linux, `localhost` resolves to `::1` (IPv6) first, but Node.js listens on IPv4 only. This caused `111: Connection refused` errors.
+
 ## Upgrade Procedure
 
 ### Step 1: Fetch upstream
