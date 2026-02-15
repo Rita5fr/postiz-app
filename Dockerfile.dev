@@ -37,6 +37,9 @@ RUN addgroup --system www \
 
 RUN npm --no-update-notifier --no-fund --global install pnpm@10.6.1 pm2
 
+# Cap V8 heap for all Node.js processes (frontend, backend, orchestrator)
+ENV NODE_OPTIONS="--max-old-space-size=768"
+
 WORKDIR /app
 
 # Copy only what's needed for runtime (no g++, make, python, no devDependencies)
